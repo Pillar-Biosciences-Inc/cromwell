@@ -11,7 +11,7 @@ import cromwell.backend.validation._
 import net.ceedubs.ficus.Ficus._
 import wom.types._
 import wom.values._
-
+import org.slf4j.{Logger, LoggerFactory}
 import scala.util.{Failure, Success, Try}
 
 
@@ -27,23 +27,26 @@ trait OptionalWithDefault[A] {
   }
 }
 
-final case class BcsRuntimeAttributes(continueOnReturnCode: ContinueOnReturnCode,
-                                dockerTag: Option[BcsDocker],
-                                docker: Option[BcsDocker],
-                                failOnStderr: Boolean,
-                                mounts: Option[Seq[BcsMount]],
-                                userData: Option[Seq[BcsUserData]],
-                                cluster: Option[BcsClusterIdOrConfiguration],
-                                imageId: Option[String],
-                                systemDisk: Option[BcsSystemDisk],
-                                dataDisk: Option[BcsDataDisk],
-                                reserveOnFail: Option[Boolean],
-                                autoReleaseJob: Option[Boolean],
-                                timeout: Option[Int],
-                                verbose: Option[Boolean],
-                                vpc: Option[BcsVpcConfiguration],
-                                tag: Option[String],
-                                isv:Option[String])
+final case class BcsRuntimeAttributes(
+  continueOnReturnCode: ContinueOnReturnCode,
+  dockerTag: Option[BcsDocker],
+  docker: Option[BcsDocker],
+  failOnStderr: Boolean,
+  mounts: Option[Seq[BcsMount]],
+  userData: Option[Seq[BcsUserData]],
+  cluster: Option[BcsClusterIdOrConfiguration],
+  imageId: Option[String],
+  systemDisk: Option[BcsSystemDisk],
+  dataDisk: Option[BcsDataDisk],
+  reserveOnFail: Option[Boolean],
+  autoReleaseJob: Option[Boolean],
+  timeout: Option[Int],
+  priority: Option[Int],
+  verbose: Option[Boolean],
+  vpc: Option[BcsVpcConfiguration],
+  tag: Option[String],
+  isv:Option[String]
+)
 
 object BcsRuntimeAttributes {
 
@@ -63,6 +66,10 @@ object BcsRuntimeAttributes {
   val DataDiskKey = "dataDisk"
   val VpcKey = "vpc"
   val TagKey = "tag"
+  // add job priority
+  val PriorityKey = "priority"
+  val PriorityDefault = WomInteger(1000)
+  val Log: Logger = LoggerFactory.getLogger("BcsRuntimeAttributes")
 
   private def failOnStderrValidation(runtimeConfig: Option[Config]) = FailOnStderrValidation.default(runtimeConfig)
 
@@ -86,6 +93,8 @@ object BcsRuntimeAttributes {
 
   private def timeoutValidation(runtimeConfig: Option[Config]): OptionalRuntimeAttributesValidation[Int] = TimeoutValidation.optionalWithDefault(runtimeConfig)
 
+  private def priorityValidation(runtimeConfig: Option[Config]): OptionalRuntimeAttributesValidation[Int] = PriorityValidation.optionalWithDefault(runtimeConfig)
+
   private def verboseValidation(runtimeConfig: Option[Config]): OptionalRuntimeAttributesValidation[Boolean] = VerboseValidation.optionalWithDefault(runtimeConfig)
 
   private def vpcValidation(runtimeConfig: Option[Config]): OptionalRuntimeAttributesValidation[BcsVpcConfiguration] = VpcValidation.optionalWithDefault(runtimeConfig)
@@ -106,6 +115,7 @@ object BcsRuntimeAttributes {
       reserveOnFailValidation(backendRuntimeConfig),
       autoReleaseJobValidation(backendRuntimeConfig),
       timeoutValidation(backendRuntimeConfig),
+      priorityValidation(backendRuntimeConfig),
       verboseValidation(backendRuntimeConfig),
       vpcValidation(backendRuntimeConfig),
       tagValidation(backendRuntimeConfig),
@@ -142,11 +152,13 @@ object BcsRuntimeAttributes {
     val reserveOnFail: Option[Boolean] = RuntimeAttributesValidation.extractOption(reserveOnFailValidation(backendRuntimeConfig).key, validatedRuntimeAttributes)
     val autoReleaseJob: Option[Boolean] = RuntimeAttributesValidation.extractOption(autoReleaseJobValidation(backendRuntimeConfig).key, validatedRuntimeAttributes)
     val timeout: Option[Int] = RuntimeAttributesValidation.extractOption(timeoutValidation(backendRuntimeConfig).key, validatedRuntimeAttributes)
+    val priority: Option[Int] = RuntimeAttributesValidation.extractOption(priorityValidation(backendRuntimeConfig).key, validatedRuntimeAttributes)
     val verbose: Option[Boolean] = RuntimeAttributesValidation.extractOption(verboseValidation(backendRuntimeConfig).key, validatedRuntimeAttributes)
     val vpc: Option[BcsVpcConfiguration] = RuntimeAttributesValidation.extractOption(vpcValidation(backendRuntimeConfig).key, validatedRuntimeAttributes)
     val tag: Option[String] = RuntimeAttributesValidation.extractOption(tagValidation(backendRuntimeConfig).key, validatedRuntimeAttributes)
     val isv: Option[String] = RuntimeAttributesValidation.extractOption(isvValidation(backendRuntimeConfig).key, validatedRuntimeAttributes)
-
+    println(s"====>>>>>>>>>>>>========priority===========${priority}")
+    Log.info(s"============priority===========${priority}")
     new BcsRuntimeAttributes(
       continueOnReturnCode,
       dockerTag,
@@ -161,6 +173,7 @@ object BcsRuntimeAttributes {
       reserveOnFail,
       autoReleaseJob,
       timeout,
+      priority,
       verbose,
       vpc,
       tag,
@@ -268,6 +281,12 @@ object TimeoutValidation {
 }
 
 class TimeoutValidation(override val config: Option[Config]) extends IntRuntimeAttributesValidation(BcsRuntimeAttributes.TimeoutKey) with OptionalWithDefault[Int]
+
+object PriorityValidation {
+  def optionalWithDefault(config: Option[Config]): OptionalRuntimeAttributesValidation[Int] = new PriorityValidation(config).optional
+}
+
+class PriorityValidation(override val config: Option[Config]) extends IntRuntimeAttributesValidation(BcsRuntimeAttributes.PriorityKey) with OptionalWithDefault[Int]
 
 object VerboseValidation {
   def optionalWithDefault(config: Option[Config]): OptionalRuntimeAttributesValidation[Boolean] = new VerboseValidation(config).optional
