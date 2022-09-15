@@ -1,0 +1,3 @@
+root@8e02beda3def:/code# sbt "project server" "run server"
+root@8e02beda3def:/code# sbt -Dproject.isSnapshot=false --warn assembly
+
