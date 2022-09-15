@@ -23,8 +23,13 @@ trait DockerCliClient {
     Would be great to just get a single hash using the key... unfortunately
     https://github.com/docker/docker/issues/29901
      */
-    forRun("docker", "images", "--digests", "--format", """{{printf "%s\t%s\t%s" .Repository .Tag .Digest}}""") {
-      _.flatMap(parseHashLine).find(_.key == dockerCliKey).map(_.digest)
+    forRun("docker", "inspect", "--format", """{{index .RepoDigests 0}}""", dockerCliKey.fullName){
+      hashLine => {
+        val tokens = hashLine(0).split("@").lift
+        for {
+          digest <- tokens(1)
+        } yield digest
+      }
     }
   }
 
@@ -74,30 +79,9 @@ trait DockerCliClient {
     val exitCode = cmd.!(ProcessLogger(line => stdout :+= line, line => stderr :+= line))
     DockerCliResult(exitCode, stdout, stderr)
   }
-
-  /**
-    * Parses a line for `lookupHash`, returning None for lines that contain the string "<none>" for any of the columns.
-    * @param hashLine The line output by the stdout of the `lookupHash` command.
-    * @return An optional `DockerCliHash`, if the all the columns are found.
-    */
-  private def parseHashLine(hashLine: String): Option[DockerCliHash] = {
-    val none = "<none>"
-    val tokens = hashLine.split("\t").lift
-    for {
-      repository <- tokens(0) if repository != none
-      tag <- tokens(1) if tag != none
-      digest <- tokens(2) if digest != none
-    } yield DockerCliHash(DockerCliKey(repository, tag), digest)
-  }
 }
 
 object DockerCliClient extends DockerCliClient
-
-/**
-  * Used by `lookupHash` to return a mapping of keys to digests.
-  * See note in `lookupHash` regarding why we even have to loop over all images.
-  */
-case class DockerCliHash(key: DockerCliKey, digest: String)
 
 /**
   * Utility that encapsulates a command's exit code, stdout, and stderr.
