@@ -157,7 +157,6 @@ object BcsRuntimeAttributes {
     val vpc: Option[BcsVpcConfiguration] = RuntimeAttributesValidation.extractOption(vpcValidation(backendRuntimeConfig).key, validatedRuntimeAttributes)
     val tag: Option[String] = RuntimeAttributesValidation.extractOption(tagValidation(backendRuntimeConfig).key, validatedRuntimeAttributes)
     val isv: Option[String] = RuntimeAttributesValidation.extractOption(isvValidation(backendRuntimeConfig).key, validatedRuntimeAttributes)
-    Log.info(s"============priority===========${priority}")
     new BcsRuntimeAttributes(
       continueOnReturnCode,
       dockerTag,
