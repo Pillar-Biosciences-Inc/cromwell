@@ -6,6 +6,8 @@ import com.aliyuncs.batchcompute.pojo.v20151111._
 import cromwell.core.ExecutionEvent
 import cromwell.core.path.Path
 
+import org.slf4j.{Logger, LoggerFactory}
+
 import scala.jdk.CollectionConverters._
 import scala.util.{Failure, Success, Try}
 
@@ -31,6 +33,8 @@ final case class BcsJob(name: String,
   lazy val lazyTask = new TaskDescription
   lazy val lazyJob = new JobDescription
   lazy val lazyCmd = new Command
+  
+  val Log: Logger = LoggerFactory.getLogger(BcsJob.getClass)
 
   def submit(): Try[String] = Try{
     val request: CreateJobRequest = new CreateJobRequest
@@ -173,6 +177,9 @@ final case class BcsJob(name: String,
 
     // NOTE: Do NOT set auto release here or we will not be able to get status after the job completes.
     lazyJob.setAutoRelease(false)
+    // add priority
+    Log.info(s"Job name: ${name}, priority: ${runtime.priority}")
+    runtime.priority foreach {priority => lazyJob.setPriority(priority.toInt)}
 
     lazyJob
   }
