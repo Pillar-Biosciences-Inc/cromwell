@@ -10,10 +10,11 @@ object Dependencies {
   private val aliyunOssV = "3.14.0"
   private val ammoniteOpsV = "2.4.1"
   private val apacheHttpClientV = "4.5.13"
-  private val awsSdkV = "2.17.152"
+  private val awsSdkV = "2.17.194"
   // We would like to use the BOM to manage Azure SDK versions, but SBT doesn't support it.
   // https://github.com/Azure/azure-sdk-for-java/tree/main/sdk/boms/azure-sdk-bom
   // https://github.com/sbt/sbt/issues/4531
+  private val azureStorageBlobNioV = "12.0.0-beta.18"
   private val azureIdentitySdkV = "1.4.2"
   private val azureKeyVaultSdkV = "4.3.7"
   private val betterFilesV = "3.9.1"
@@ -44,10 +45,8 @@ object Dependencies {
   // latest date via: https://github.com/googleapis/google-api-java-client-services/blob/main/clients/google-api-services-cloudkms/v1.metadata.json
   private val googleCloudKmsV = "v1-rev20220104-1.32.1"
   private val googleCloudMonitoringV = "3.2.5"
-  // BW-808 Pinning googleCloudNioV to this tried-and-true old version and quieting Scala Steward.
-  // 0.121.2 is the most recent version currently known to work.
-  private val googleCloudNioV = "0.61.0-alpha" // scala-steward:off
-  private val googleCloudStorageV = "2.1.10"
+  private val googleCloudNioV = "0.124.8"
+  private val googleCloudStorageV = "2.9.2"
   private val googleGaxGrpcV = "2.12.2"
   // latest date via: https://mvnrepository.com/artifact/com.google.apis/google-api-services-genomics
   private val googleGenomicsServicesV2Alpha1ApiV = "v2alpha1-rev20210811-1.32.1"
@@ -83,6 +82,10 @@ object Dependencies {
   private val mockitoV = "3.11.2"
   private val mockserverNettyV = "5.11.2"
   private val mouseV = "1.0.10"
+  /*
+  Newer version 8.0.29 fails `Control characters should work with metadata` Centaur tests, has charset changes mentioned in release notes
+  https://dev.mysql.com/doc/relnotes/mysql/8.0/en/news-8-0-29.html#mysqld-8-0-29-charset
+   */
   private val mysqlV = "8.0.28"
   private val nettyV = "4.1.72.Final"
   private val owlApiV = "5.1.19"
@@ -183,12 +186,17 @@ object Dependencies {
   )
 
   val azureDependencies: List[ModuleID] = List(
+    "com.azure" % "azure-storage-blob-nio" % azureStorageBlobNioV
+      exclude("jakarta.xml.bind", "jakarta.xml.bind-api")
+      exclude("jakarta.activation", "jakarta.activation-api"),
     "com.azure" % "azure-identity" % azureIdentitySdkV
       exclude("jakarta.xml.bind", "jakarta.xml.bind-api")
       exclude("jakarta.activation", "jakarta.activation-api"),
     "com.azure" % "azure-security-keyvault-secrets" % azureKeyVaultSdkV
       exclude("jakarta.xml.bind", "jakarta.xml.bind-api")
-      exclude("jakarta.activation", "jakarta.activation-api")
+      exclude("jakarta.activation", "jakarta.activation-api"),
+    "com.azure" % "azure-core-management" % "1.7.0",
+    "com.azure.resourcemanager" % "azure-resourcemanager" % "2.17.0"
   )
 
   val implFtpDependencies = List(
@@ -234,7 +242,13 @@ object Dependencies {
     "org.codehaus.janino" % "janino" % janinoV,
     // Replace all log4j usage with slf4j
     // https://www.slf4j.org/legacy.html#log4j-over-slf4j
-    "org.slf4j" % "log4j-over-slf4j" % slf4jV
+    "org.slf4j" % "log4j-over-slf4j" % slf4jV,
+    // Replace all commons-logging usage with slf4j
+    // https://www.slf4j.org/legacy.html#jcl-over-slf4j
+    "org.slf4j" % "jcl-over-slf4j" % slf4jV,
+    // Enable runtime replacing of java.util.logging usage with slf4j
+    // https://www.slf4j.org/legacy.html#jul-to-slf4j
+    "org.slf4j" % "jul-to-slf4j" % slf4jV,
   ) ++ slf4jFacadeDependencies
 
   private val slickDependencies = List(
@@ -412,6 +426,8 @@ object Dependencies {
   private val testDatabaseDependencies =
     List("scalatest", "mysql", "mariadb", "postgresql")
       .map(name => "com.dimafeng" %% s"testcontainers-scala-$name" % testContainersScalaV % Test)
+
+  val blobFileSystemDependencies: List[ModuleID] = azureDependencies
 
   val s3FileSystemDependencies: List[ModuleID] = junitDependencies
 
@@ -720,6 +736,10 @@ object Dependencies {
     "org.bouncycastle" % "bcprov-jdk15on" % "1.70",
   )
 
+  private val protobufJavaOverrides = List(
+    "com.google.protobuf" % "protobuf-java" % "3.21.2",
+  )
+
   /*
   If we use a version in one of our projects, that's the one we want all the libraries to use
   ...plus other groups of transitive dependencies shared across multiple projects
@@ -733,5 +753,14 @@ object Dependencies {
       scalaCollectionCompatOverrides ++
       asyncHttpClientOverrides ++
       nimbusdsOverrides ++
-      bouncyCastleOverrides
+      bouncyCastleOverrides ++
+      protobufJavaOverrides
+
+  /*
+  Libraries that should be globally excluded.
+   */
+  val cromwellExcludeDependencies: List[ExclusionRule] = List(
+    // Replaced with jcl-over-slf4j
+    ExclusionRule("commons-logging", "commons-logging"),
+  )
 }

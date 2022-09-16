@@ -75,7 +75,7 @@ object DockerImageIdentifier {
       // If repo/image (e.g broadinstitute/cromwell) without host
       case repo :: image :: Nil if !isRegistryHostName(repo) => (None, Option(repo), image)
       // If host/image (e.g index.docker.io/ubuntu), assume default repo
-      case host :: image :: Nil if isRegistryHostName(host) => (Option(host), None, image)
+      case host :: image :: Nil if isRegistryHostName(host) => (Option(host), Some(""), image)
       // Not a host followed more than one components
       case nothost :: rest if !isRegistryHostName(nothost) =>
         val repo = s"$nothost/${rest.init.mkString("/")}"
