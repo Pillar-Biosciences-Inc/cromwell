@@ -11,7 +11,6 @@ import cromwell.backend.validation._
 import net.ceedubs.ficus.Ficus._
 import wom.types._
 import wom.values._
-import org.slf4j.{Logger, LoggerFactory}
 import scala.util.{Failure, Success, Try}
 
 
@@ -69,7 +68,6 @@ object BcsRuntimeAttributes {
   // add job priority
   val PriorityKey = "priority"
   val PriorityDefault = WomInteger(1000)
-  val Log: Logger = LoggerFactory.getLogger("BcsRuntimeAttributes")
 
   private def failOnStderrValidation(runtimeConfig: Option[Config]) = FailOnStderrValidation.default(runtimeConfig)
 
