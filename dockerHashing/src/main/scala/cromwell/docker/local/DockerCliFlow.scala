@@ -117,7 +117,7 @@ object DockerCliFlow {
         DockerCliKey(repository, tag)
       case _ =>
         // For all other images, include the host and repository.
-        val repository = s"${imageId.hostAsString}${imageId.nameWithDefaultRepository}"
+        val repository = s"${imageId.hostAsString}${imageId.nameWithDefaultRepository}".replaceAll("//", "/")
         val tag = imageId.reference
         DockerCliKey(repository, tag)
     }
