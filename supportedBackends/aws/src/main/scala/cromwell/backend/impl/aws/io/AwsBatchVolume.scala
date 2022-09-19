@@ -40,7 +40,6 @@ import cromwell.backend.DiskPatterns
 import wom.values._
 import org.slf4j.{Logger, LoggerFactory}
 import scala.util.Try
-import scala.util.matching.Regex
 
 
 /*
@@ -51,6 +50,8 @@ import scala.util.matching.Regex
  */
 
 object AwsBatchVolume {
+  val Log: Logger = LoggerFactory.getLogger("AwsBatchVolume")
+  
   def parse(s: String): Try[AwsBatchVolume] = {
     Log.info("AwsBatchVolume parse mounts: {}", s)
 
