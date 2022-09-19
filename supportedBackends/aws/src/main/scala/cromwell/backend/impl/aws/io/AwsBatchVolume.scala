@@ -36,7 +36,6 @@ import software.amazon.awssdk.services.batch.model.{Host, MountPoint, Volume}
 import cromwell.core.path.{DefaultPathBuilder, Path}
 import common.exception.MessageAggregation
 import common.validation.ErrorOr._
-import cromwell.backend.DiskPatterns
 import wom.values._
 import org.slf4j.{Logger, LoggerFactory}
 import scala.util.Try
