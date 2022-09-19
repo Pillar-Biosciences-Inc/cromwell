@@ -87,7 +87,7 @@ object AwsBatchRuntimeAttributes {
   private val NoAddressDefaultValue = WomBoolean(false)
 
   // TODO: Determine good volume format
-  val DisksKey = "disks"
+  val DisksKey = "mounts"
   private val DisksDefaultValue = WomString(s"${AwsBatchWorkingDisk.Name}")
 
   private val MemoryDefaultValue = "2 GB"
