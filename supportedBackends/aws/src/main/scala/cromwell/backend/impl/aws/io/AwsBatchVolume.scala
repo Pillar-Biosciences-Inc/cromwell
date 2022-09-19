@@ -38,7 +38,7 @@ import common.exception.MessageAggregation
 import common.validation.ErrorOr._
 import cromwell.backend.DiskPatterns
 import wom.values._
-
+import org.slf4j.{Logger, LoggerFactory}
 import scala.util.Try
 import scala.util.matching.Regex
 
@@ -51,25 +51,44 @@ import scala.util.matching.Regex
  */
 
 object AwsBatchVolume {
-  // In AWS, disks are auto-sized so these patterns match simply "local-disk" or "/some/mnt"
-  val MountedDiskPattern: Regex = raw"""^\s*(${DiskPatterns.Directory})\s*$$""".r
-  val LocalDiskPattern: Regex = raw"""^\s*local-disk\s*$$""".r
-
   def parse(s: String): Try[AwsBatchVolume] = {
+    Log.info("AwsBatchVolume parse mounts: {}", s)
 
-    val validation: ErrorOr[AwsBatchVolume] = s match {
-      case LocalDiskPattern() =>
-        Valid(AwsBatchWorkingDisk())
-      case MountedDiskPattern(mountPoint) =>
-        Valid(AwsBatchEmptyMountedDisk(DefaultPathBuilder.get(mountPoint)))
-      // In addition to the AWS-specific patterns above, we can also fall back to PAPI-style patterns and ignore the size
-      case DiskPatterns.WorkingDiskPattern(_, _) =>
-        Valid(AwsBatchWorkingDisk())
-      case DiskPatterns.MountedDiskPattern(mountPoint, _, fsType) =>
-        Valid(AwsBatchEmptyMountedDisk(DefaultPathBuilder.get(mountPoint),fsType))
-      case _ =>
-        s"Disk strings should be of the format 'local-disk' or '/mount/point' but got: '$s'".invalidNel
+    val volume_conf: Array[String] = s.trim.split("\\s+")
+    val volume_conf_length: Int = volume_conf.length
+    val hostPath: String = volume_conf(0).trim
+    if (!hostPath.startsWith("/")){
+        throw new UnsupportedOperationException with MessageAggregation {
+          val exceptionContext = ""
+          val errorMessages: List[String] = List(s"Docker mount source path must start with '/' but got: '$s'")
+        }
     }
+    
+    val validation: ErrorOr[AwsBatchVolume] = volume_conf_length match {
+      case 1 =>
+        Valid(AwsBatchEmptyMountedDisk(DefaultPathBuilder.get(hostPath), DefaultPathBuilder.get(hostPath)))
+      case volume_conf_length if (volume_conf_length>1) =>
+        val two_value: String = volume_conf(1).trim
+        var readOnly: Boolean = true
+        var mountPath: String  = hostPath
+        if (two_value.toLowerCase == "false"){
+          readOnly = false
+        }
+        else if (two_value.toLowerCase == "true"){
+          readOnly = true
+        } 
+        else if (!two_value.startsWith("/")){
+          s"Docker mount destination path must start with '/' but got: '$s'".invalidNel
+        }
+        else{
+          mountPath = two_value
+        }
+        if (volume_conf_length>=3 && volume_conf(2).trim.toLowerCase == "false"){
+          readOnly = false
+        }
+
+        Valid(AwsBatchEmptyMountedDisk(DefaultPathBuilder.get(hostPath), DefaultPathBuilder.get(mountPath), readOnly))
+    } 
 
     Try(validation match {
       case Valid(localDisk) => localDisk
@@ -84,34 +103,31 @@ object AwsBatchVolume {
 
 trait AwsBatchVolume {
   def name: String
+  def hostPoint: Path
   def mountPoint: Path
+  def readOnly: Boolean
   def fsType: String
-  def getHostPath(id: Option[String]) : String =  {
-    id match {
-      case Some(id) => mountPoint.toAbsolutePath.pathAsString + "/" + id
-      case None   =>   mountPoint.toAbsolutePath.pathAsString
-    }
-  }
   def toVolume(id: Option[String]=None): Volume = {
     Volume
       .builder
       .name(name)
-      .host(Host.builder.sourcePath(getHostPath(id)).build)
+      .host(Host.builder.sourcePath(hostPoint.toAbsolutePath.pathAsString).build)
       .build
   }
   def toMountPoint: MountPoint = {
     MountPoint
       .builder
+      .readOnly(readOnly)
       .containerPath(mountPoint.toAbsolutePath.pathAsString)
       .sourceVolume(name)
       .build
   }
 }
 
-case class AwsBatchEmptyMountedDisk(mountPoint: Path, ftype:String="ebs") extends AwsBatchVolume {
+case class AwsBatchEmptyMountedDisk(hostPoint: Path, mountPoint: Path, readOnly: Boolean=true) extends AwsBatchVolume {
   val name = s"d-${mountPoint.pathAsString.md5Sum}"
-  val fsType = ftype.toLowerCase
-  override def toString: String = s"$name $mountPoint"
+  val fsType=  "ebs"
+  override def toString: String = s"$hostPoint $mountPoint $readOnly"
 }
 
 object AwsBatchWorkingDisk {
@@ -125,5 +141,7 @@ case class AwsBatchWorkingDisk() extends AwsBatchVolume {
   val mountPoint = AwsBatchWorkingDisk.MountPoint
   val name = AwsBatchWorkingDisk.Name
   val fsType = AwsBatchWorkingDisk.fsType
-  override def toString: String = s"$name $mountPoint"
+  val hostPoint = mountPoint
+  val readOnly = false
+  override def toString: String = s"$hostPoint $mountPoint $readOnly"
 }

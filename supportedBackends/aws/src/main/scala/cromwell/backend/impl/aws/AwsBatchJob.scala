@@ -30,8 +30,6 @@
  */
 package cromwell.backend.impl.aws
 
-import java.security.MessageDigest
-
 import cats.data.ReaderT._
 import cats.data.{Kleisli, ReaderT}
 import cats.effect.{Async, Timer}
@@ -50,7 +48,7 @@ import software.amazon.awssdk.services.batch.model._
 import software.amazon.awssdk.services.cloudwatchlogs.CloudWatchLogsClient
 import software.amazon.awssdk.services.cloudwatchlogs.model.{GetLogEventsRequest, OutputLogEvent}
 import software.amazon.awssdk.services.s3.S3Client
-import software.amazon.awssdk.services.s3.model.{GetObjectRequest, HeadObjectRequest, NoSuchKeyException, PutObjectRequest}
+import software.amazon.awssdk.services.s3.model.{PutObjectRequest}
 import wdl4s.parser.MemoryUnit
 
 import scala.jdk.CollectionConverters._
@@ -89,9 +87,6 @@ final case class AwsBatchJob(jobDescriptor: BackendJobDescriptor, // WDL/CWL
   val AWS_RETRY_MODE_DEFAULT_VALUE: String = "adaptive"
 
   val Log: Logger = LoggerFactory.getLogger(AwsBatchJob.getClass)
-
-  //this will be the "folder" that scripts will live in (underneath the script bucket)
-  val scriptKeyPrefix = "scripts/"
 
   // TODO: Auth, endpoint
   lazy val batchClient: BatchClient = {
@@ -212,16 +207,16 @@ final case class AwsBatchJob(jobDescriptor: BackendJobDescriptor, // WDL/CWL
          |}
          |""".stripMargin
   }
-  private def batch_file_s3_url(scriptBucketName: String, scriptKeyPrefix: String, scriptKey: String): String  = runtimeAttributes.fileSystem match {
-       case AWSBatchStorageSystems.s3  => s"s3://${runtimeAttributes.scriptS3BucketName}/$scriptKeyPrefix$scriptKey"
+  private def batch_file_s3_url(scriptBucketName: String, scriptKey: String): String  = runtimeAttributes.fileSystem match {
+       case AWSBatchStorageSystems.s3  => s"s3://${scriptBucketName}/$scriptKey"
        case _ => ""
   }
 
-  private def generateEnvironmentKVPairs(scriptBucketName: String, scriptKeyPrefix: String, scriptKey: String): List[KeyValuePair] = {
+  private def generateEnvironmentKVPairs(scriptBucketName: String, scriptKey: String): List[KeyValuePair] = {
     List(buildKVPair(AWS_MAX_ATTEMPTS, AWS_MAX_ATTEMPTS_DEFAULT_VALUE),
       buildKVPair(AWS_RETRY_MODE, AWS_RETRY_MODE_DEFAULT_VALUE),
       buildKVPair("BATCH_FILE_TYPE", "script"),
-      buildKVPair("BATCH_FILE_S3_URL",batch_file_s3_url(scriptBucketName,scriptKeyPrefix,scriptKey)))
+      buildKVPair("BATCH_FILE_S3_URL",batch_file_s3_url(scriptBucketName,scriptKey)))
   }
 
   def submitJob[F[_]]()( implicit timer: Timer[F], async: Async[F]): Aws[F, SubmitJobResponse] = {
@@ -229,20 +224,15 @@ final case class AwsBatchJob(jobDescriptor: BackendJobDescriptor, // WDL/CWL
     val taskId = jobDescriptor.key.call.fullyQualifiedName + "-" + jobDescriptor.key.index + "-" + jobDescriptor.key.attempt
 
     //find or create the script in s3 to execute for s3 fileSystem
+    val regex = "s3://([^/]*)/(.*)".r
+    val regex(bucketName, jobCallExecutionRoot) = jobPaths.callExecutionRoot.toString
     val scriptKey =  runtimeAttributes.fileSystem match {
-       case AWSBatchStorageSystems.s3  =>  findOrCreateS3Script(reconfiguredScript, runtimeAttributes.scriptS3BucketName)
+       case AWSBatchStorageSystems.s3  =>  findOrCreateS3Script(reconfiguredScript, bucketName, jobCallExecutionRoot)
        case _ => ""
     }
 
-    if(runtimeAttributes.fileSystem == AWSBatchStorageSystems.s3) {
-       val regex = "s3://([^/]*)/(.*)".r
-       val regex(bucketName, key) = jobPaths.callExecutionRoot.toString
-       writeReconfiguredScriptForAudit(reconfiguredScript, bucketName, key+"/reconfigured-script.sh")
-    }
-
-
     val batch_script = runtimeAttributes.fileSystem match {
-       case AWSBatchStorageSystems.s3  => s"s3://${runtimeAttributes.scriptS3BucketName}/$scriptKeyPrefix$scriptKey"
+       case AWSBatchStorageSystems.s3  => s"s3://$bucketName/$scriptKey"
        case _  => commandScript
     }
 
@@ -261,8 +251,7 @@ final case class AwsBatchJob(jobDescriptor: BackendJobDescriptor, // WDL/CWL
             .containerOverrides(
               ContainerOverrides.builder
                 .environment(
-
-                  generateEnvironmentKVPairs(runtimeAttributes.scriptS3BucketName, scriptKeyPrefix, scriptKey): _*
+                  generateEnvironmentKVPairs(runtimeAttributes.scriptS3BucketName, scriptKey): _*
                 )
                 .resourceRequirements(
                   ResourceRequirement.builder()
@@ -303,41 +292,16 @@ final case class AwsBatchJob(jobDescriptor: BackendJobDescriptor, // WDL/CWL
   private def findOrCreateS3Script(commandLine :String, scriptS3BucketName: String) :String = {
 
     val bucketName = scriptS3BucketName
+    val scriptKey = s"$jobCallExecutionRoot/script.submit"
+    Log.debug(s"s3 object name for script is calculated to be s3://$bucketName/$scriptKey")
+    val putRequest = PutObjectRequest.builder()
+      .bucket(bucketName) //remove the "s3://" prefix
+      .key(scriptKey)
+      .build
 
-    val key = MessageDigest.getInstance("MD5")
-      .digest(commandLine.getBytes())
-      .foldLeft("")(_ + "%02x".format(_))
-
-    Log.debug(s"s3 object name for script is calculated to be s3://$bucketName/$scriptKeyPrefix$key")
-
-    try { //try and get the object
-
-      s3Client.getObject( GetObjectRequest.builder().bucket(bucketName).key( scriptKeyPrefix + key).build )
-      s3Client.headObject(HeadObjectRequest.builder()
-        .bucket(bucketName)
-        .key( scriptKeyPrefix + key )
-        .build
-      ).eTag().equals(key)
-
-      // if there's no exception then the script already exists
-      Log.debug(s"""Found script $bucketName/$scriptKeyPrefix$key""")
-    } catch {
-      case _: NoSuchKeyException =>  //this happens if there is no object with that key in the bucket
-        val putRequest = PutObjectRequest.builder()
-          .bucket(bucketName) //remove the "s3://" prefix
-          .key(scriptKeyPrefix + key)
-          .build
-
-        s3Client.putObject(putRequest, RequestBody.fromString(commandLine))
-
-        Log.debug(s"Created script $key")
-    }
-    key
-  }
-
-  private def writeReconfiguredScriptForAudit( reconfiguredScript: String, bucketName: String, key: String) = {
-    val putObjectRequest = PutObjectRequest.builder().bucket(bucketName).key(key).build()
-    s3Client.putObject(putObjectRequest, RequestBody.fromString(reconfiguredScript))
+    s3Client.putObject(putRequest, RequestBody.fromString(commandLine))
+    Log.info(s"Created script $scriptKey")
+    scriptKey
   }
 
   /** Creates a job definition in AWS Batch
