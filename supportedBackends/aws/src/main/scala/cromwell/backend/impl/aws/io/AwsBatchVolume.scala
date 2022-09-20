@@ -126,7 +126,7 @@ trait AwsBatchVolume {
 
 case class AwsBatchEmptyMountedDisk(hostPoint: Path, mountPoint: Path, readOnly: Boolean=true) extends AwsBatchVolume {
   val name = s"d-${mountPoint.pathAsString.md5Sum}"
-  val fsType=  "ebs"
+  val fsType=  "efs"
   override def toString: String = s"$hostPoint $mountPoint $readOnly"
 }
 
