@@ -35,7 +35,7 @@ import scala.collection.mutable.ListBuffer
 import cromwell.backend.BackendJobDescriptor
 import cromwell.backend.io.JobPaths
 import software.amazon.awssdk.services.batch.model.{ContainerProperties, Host, KeyValuePair, MountPoint, ResourceRequirement, ResourceType, Volume}
-import cromwell.backend.impl.aws.io.AwsBatchVolume
+import cromwell.backend.impl.aws.io.{AwsBatchVolume, AwsBatchWorkingDisk}
 
 import scala.jdk.CollectionConverters._
 import java.security.MessageDigest
@@ -96,7 +96,7 @@ trait AwsBatchJobDefinitionBuilder {
     def buildVolumes(disks: Seq[AwsBatchVolume]): List[Volume] = {
 
       //all the configured disks plus the fetch and run volume and the aws-cli volume
-      disks.map(d => d.toVolume()).toList ++ List(
+      disks.filter(d=>d.name!=AwsBatchWorkingDisk.Name).map(d => d.toVolume()).toList ++ List(
         Volume.builder()
         .name("fetchAndRunScript")
         .host(Host.builder().sourcePath("/usr/local/bin/fetch_and_run.sh").build())
@@ -112,7 +112,7 @@ trait AwsBatchJobDefinitionBuilder {
     def buildMountPoints(disks: Seq[AwsBatchVolume]): List[MountPoint] = {
 
       //all the configured disks plus the fetch and run mount point and the AWS cli mount point
-      disks.map(_.toMountPoint).toList ++ List(
+      disks.filter(d=>d.name!=AwsBatchWorkingDisk.Name).map(_.toMountPoint).toList ++ List(
         MountPoint.builder()
           .readOnly(true)
           .sourceVolume("fetchAndRunScript")
