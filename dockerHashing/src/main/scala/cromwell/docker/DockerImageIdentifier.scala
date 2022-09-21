@@ -11,10 +11,18 @@ sealed trait DockerImageIdentifier {
   def swapReference(newReference: String): DockerImageIdentifier
 
   // The name of the image with a repository prefix iff a repository was explicitly specified.
-  lazy val name = repository map { r => s"$r/$image" } getOrElse image
+  lazy val name = if (repository == Some("")) {
+    image
+  }else{
+    repository map { r => s"$r/$image" } getOrElse image
+  }
   // The name of the image with a repository prefix if a repository was specified, or with a default repository prefix of
   // "library" if no repository was specified.
-  lazy val nameWithDefaultRepository = repository.getOrElse("library") + s"/$image"
+  lazy val nameWithDefaultRepository = if (repository == Some("")) {
+    image
+  }else{
+    repository.getOrElse("library") + s"/$image"
+  }
   lazy val hostAsString = host map { h => s"$h/" } getOrElse ""
   // The full name of this image, including a repository prefix only if a repository was explicitly specified.
   lazy val fullName = s"$hostAsString$name:$reference"

@@ -36,11 +36,9 @@ import software.amazon.awssdk.services.batch.model.{Host, MountPoint, Volume}
 import cromwell.core.path.{DefaultPathBuilder, Path}
 import common.exception.MessageAggregation
 import common.validation.ErrorOr._
-import cromwell.backend.DiskPatterns
 import wom.values._
 import org.slf4j.{Logger, LoggerFactory}
 import scala.util.Try
-import scala.util.matching.Regex
 
 
 /*
@@ -51,6 +49,8 @@ import scala.util.matching.Regex
  */
 
 object AwsBatchVolume {
+  val Log: Logger = LoggerFactory.getLogger("AwsBatchVolume")
+  
   def parse(s: String): Try[AwsBatchVolume] = {
     Log.info("AwsBatchVolume parse mounts: {}", s)
     if (s.trim == AwsBatchWorkingDisk.Name || s.trim == ""){
@@ -129,7 +129,7 @@ trait AwsBatchVolume {
 
 case class AwsBatchEmptyMountedDisk(hostPoint: Path, mountPoint: Path, readOnly: Boolean=true) extends AwsBatchVolume {
   val name = s"d-${mountPoint.pathAsString.md5Sum}"
-  val fsType=  "ebs"
+  val fsType=  "efs"
   override def toString: String = s"$hostPoint $mountPoint $readOnly"
 }
 

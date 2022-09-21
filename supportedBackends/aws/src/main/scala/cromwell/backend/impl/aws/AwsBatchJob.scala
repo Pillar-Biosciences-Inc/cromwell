@@ -289,7 +289,7 @@ final case class AwsBatchJob(jobDescriptor: BackendJobDescriptor, // WDL/CWL
     * @param scriptS3BucketName the bucket that stores the scripts
     * @return the name of the script that was found or created
     */
-  private def findOrCreateS3Script(commandLine :String, scriptS3BucketName: String) :String = {
+  private def findOrCreateS3Script(commandLine :String, scriptS3BucketName: String, jobCallExecutionRoot: String) :String = {
 
     val bucketName = scriptS3BucketName
     val scriptKey = s"$jobCallExecutionRoot/script.submit"
