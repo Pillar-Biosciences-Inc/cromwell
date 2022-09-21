@@ -72,13 +72,13 @@ object AwsBatchVolume {
         Valid(AwsBatchEmptyMountedDisk(DefaultPathBuilder.get(hostPath), DefaultPathBuilder.get(hostPath)))
       case volume_conf_length if (volume_conf_length>1) =>
         val two_value: String = volume_conf(1).trim
-        var readOnly: Boolean = true
+        var writeSupport: Boolean = false
         var mountPath: String  = hostPath
         if (two_value.toLowerCase == "false"){
-          readOnly = false
+          writeSupport = false
         }
         else if (two_value.toLowerCase == "true"){
-          readOnly = true
+          writeSupport = true
         } 
         else if (!two_value.startsWith("/")){
           s"Docker mount destination path must start with '/' but got: '$s'".invalidNel
@@ -86,11 +86,11 @@ object AwsBatchVolume {
         else{
           mountPath = two_value
         }
-        if (volume_conf_length>=3 && volume_conf(2).trim.toLowerCase == "false"){
-          readOnly = false
+        if (volume_conf_length>=3 && volume_conf(2).trim.toLowerCase == "true"){
+          writeSupport = true
         }
 
-        Valid(AwsBatchEmptyMountedDisk(DefaultPathBuilder.get(hostPath), DefaultPathBuilder.get(mountPath), readOnly))
+        Valid(AwsBatchEmptyMountedDisk(DefaultPathBuilder.get(hostPath), DefaultPathBuilder.get(mountPath), writeSupport))
     } 
 
     Try(validation match {
@@ -108,7 +108,7 @@ trait AwsBatchVolume {
   def name: String
   def hostPoint: Path
   def mountPoint: Path
-  def readOnly: Boolean
+  def writeSupport: Boolean
   def fsType: String
   def toVolume(id: Option[String]=None): Volume = {
     Volume
@@ -120,17 +120,17 @@ trait AwsBatchVolume {
   def toMountPoint: MountPoint = {
     MountPoint
       .builder
-      .readOnly(readOnly)
+      .readOnly(!writeSupport)
       .containerPath(mountPoint.toAbsolutePath.pathAsString)
       .sourceVolume(name)
       .build
   }
 }
 
-case class AwsBatchEmptyMountedDisk(hostPoint: Path, mountPoint: Path, readOnly: Boolean=true) extends AwsBatchVolume {
+case class AwsBatchEmptyMountedDisk(hostPoint: Path, mountPoint: Path, writeSupport: Boolean=false) extends AwsBatchVolume {
   val name = s"d-${mountPoint.pathAsString.md5Sum}"
   val fsType=  "efs"
-  override def toString: String = s"$hostPoint $mountPoint $readOnly"
+  override def toString: String = s"$hostPoint $mountPoint $writeSupport"
 }
 
 object AwsBatchWorkingDisk {
@@ -145,6 +145,6 @@ case class AwsBatchWorkingDisk() extends AwsBatchVolume {
   val name = AwsBatchWorkingDisk.Name
   val fsType = AwsBatchWorkingDisk.fsType
   val hostPoint = mountPoint
-  val readOnly = false
-  override def toString: String = s"$hostPoint $mountPoint $readOnly"
+  val writeSupport = false
+  override def toString: String = s"$hostPoint $mountPoint $writeSupport"
 }
