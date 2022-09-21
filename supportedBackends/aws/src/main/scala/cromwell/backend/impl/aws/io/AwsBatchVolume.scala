@@ -53,6 +53,9 @@ import scala.util.matching.Regex
 object AwsBatchVolume {
   def parse(s: String): Try[AwsBatchVolume] = {
     Log.info("AwsBatchVolume parse mounts: {}", s)
+    if (s.trim == AwsBatchWorkingDisk.Name || s.trim == ""){
+      return Try(AwsBatchWorkingDisk())
+    }
 
     val volume_conf: Array[String] = s.trim.split("\\s+")
     val volume_conf_length: Int = volume_conf.length
