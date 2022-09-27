@@ -6,7 +6,7 @@ import com.aliyuncs.batchcompute.pojo.v20151111._
 import cromwell.core.ExecutionEvent
 import cromwell.core.path.Path
 
-import org.slf4j.{Logger, LoggerFactory}
+import org.slf4j.Logger
 
 import scala.jdk.CollectionConverters._
 import scala.util.{Failure, Success, Try}
@@ -16,16 +16,19 @@ object BcsJob{
   val BcsDockerPathEnvKey = "BATCH_COMPUTE_DOCKER_REGISTRY_OSS_PATH"
 }
 
-final case class BcsJob(name: String,
-                  description: String,
-                  commandString: String,
-                  packagePath: Path,
-                  mounts: Seq[BcsMount],
-                  envs: Map[String, String],
-                  runtime: BcsRuntimeAttributes,
-                  stdoutPath: Option[Path],
-                  stderrPath: Option[Path],
-                  batchCompute: BatchComputeClient) {
+final case class BcsJob(
+  name: String,
+  description: String,
+  commandString: String,
+  packagePath: Path,
+  mounts: Seq[BcsMount],
+  envs: Map[String, String],
+  runtime: BcsRuntimeAttributes,
+  stdoutPath: Option[Path],
+  stderrPath: Option[Path],
+  batchCompute: BatchComputeClient,
+  jobLogger: Logger
+) {
 
   lazy val lazyDisks = new Disks
   lazy val lazyConfigs = new Configs
@@ -34,8 +37,6 @@ final case class BcsJob(name: String,
   lazy val lazyJob = new JobDescription
   lazy val lazyCmd = new Command
   
-  val Log: Logger = LoggerFactory.getLogger(BcsJob.getClass)
-
   def submit(): Try[String] = Try{
     val request: CreateJobRequest = new CreateJobRequest
     request.setJobDescription(jobDesc)
@@ -178,7 +179,7 @@ final case class BcsJob(name: String,
     // NOTE: Do NOT set auto release here or we will not be able to get status after the job completes.
     lazyJob.setAutoRelease(false)
     // add priority
-    Log.info(s"Job name: ${name}, priority: ${runtime.priority}")
+    jobLogger.info(s"Job name: ${name}, priority: ${runtime.priority}")
     runtime.priority foreach {priority => lazyJob.setPriority(priority.toInt)}
 
     lazyJob
@@ -213,7 +214,16 @@ final case class BcsJob(name: String,
   private def handleAutoCluster(config: AutoClusterConfiguration): Unit = {
     val autoCluster = new AutoCluster
     autoCluster.setImageId(runtime.imageId.getOrElse(config.imageId))
-    autoCluster.setInstanceType(config.instanceType)
+    runtime.matchInstanceTypeQuota match {
+      case Some(instance: BcsInstanceTypeQuota) =>  {
+        jobLogger.info(s"Set instance type of ${instance} for auto cluster")
+        autoCluster.setInstanceType(instance.instanceType)
+      }
+      case _ => {
+        jobLogger.info(s"Set instance type of ${config.instanceType} for auto cluster")
+        autoCluster.setInstanceType(config.instanceType)
+      }
+    }
     autoCluster.setResourceType(config.resourceType)
 
     config.spotStrategy foreach {strategy => autoCluster.setSpotStrategy(strategy)}

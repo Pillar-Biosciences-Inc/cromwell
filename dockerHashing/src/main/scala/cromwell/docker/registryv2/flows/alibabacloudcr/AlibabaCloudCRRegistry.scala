@@ -21,7 +21,7 @@ class AlibabaCloudCRRegistry(config: DockerRegistryConfig) extends DockerRegistr
   val ProductName = "cr"
   val HashAlg = "sha256"
   val regionPattern = """[^\s]+"""
-  val validAlibabaCloudCRHosts: Regex = s"""registry.($regionPattern).aliyuncs.com""".r
+  val validAlibabaCloudCRHosts: Regex = s"""registry|registry-internal.($regionPattern).aliyuncs.com""".r
 
   val validCrEndpoint: Regex = s"""cr.($regionPattern).aliyuncs.com""".r
   val validCrVpcEndpoint: Regex = s"""cr-vpc.($regionPattern).aliyuncs.com""".r

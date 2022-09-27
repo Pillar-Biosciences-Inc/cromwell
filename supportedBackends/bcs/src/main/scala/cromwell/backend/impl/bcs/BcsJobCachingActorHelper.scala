@@ -37,7 +37,7 @@ trait BcsJobCachingActorHelper extends StandardCachingActorHelper {
 
   lazy val bcsConfiguration: BcsConfiguration = initializationData.bcsConfiguration
 
-  lazy val runtimeAttributes = BcsRuntimeAttributes(validatedRuntimeAttributes, bcsConfiguration.runtimeConfig)
+  lazy val runtimeAttributes = BcsRuntimeAttributes(validatedRuntimeAttributes, bcsConfiguration)
 
   lazy val callRootPath: Path = bcsJobPaths.callExecutionRoot
 

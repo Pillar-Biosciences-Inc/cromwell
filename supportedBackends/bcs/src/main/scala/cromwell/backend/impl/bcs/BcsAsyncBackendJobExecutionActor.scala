@@ -324,16 +324,18 @@ final class BcsAsyncBackendJobExecutionActor(override val standardParams: Standa
     val envs = bcsEnvs
 
     val bcsJob = new BcsJob(
-          jobName,
-          jobTag,
-          bcsCommandLine,
-          uploadBcsWorkerPackage,
-          bcsMounts,
-          envs,
-          runtimeAttributes,
-          Some(bcsJobPaths.bcsStdoutPath),
-          Some(bcsJobPaths.bcsStderrPath),
-          bcsClient)
+        jobName,
+        jobTag,
+        bcsCommandLine,
+        uploadBcsWorkerPackage,
+        bcsMounts,
+        envs,
+        runtimeAttributes,
+        Some(bcsJobPaths.bcsStdoutPath),
+        Some(bcsJobPaths.bcsStderrPath),
+        bcsClient,
+        jobLogger
+    )
 
     for {
       jobId <- Future.fromTry(bcsJob.submit())

@@ -4,12 +4,14 @@ package cromwell.backend.impl.bcs
 import scala.util.{Try, Success, Failure}
 import scala.util.matching.Regex
 
-final case class AutoClusterConfiguration(resourceType: String,
-                                    instanceType: String,
-                                    imageId: String,
-                                    spotStrategy: Option[String] = None,
-                                    spotPriceLimit: Option[Float] = None,
-                                    clusterId: Option[String] = None)
+final case class AutoClusterConfiguration(
+  resourceType: String,
+  instanceType: String,
+  imageId: String,
+  spotStrategy: Option[String] = None,
+  spotPriceLimit: Option[Float] = None,
+  clusterId: Option[String] = None
+)
 
 
 object BcsClusterIdOrConfiguration {
