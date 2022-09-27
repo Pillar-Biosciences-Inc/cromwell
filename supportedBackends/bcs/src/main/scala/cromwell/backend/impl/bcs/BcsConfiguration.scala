@@ -68,4 +68,8 @@ final class BcsConfiguration(val configurationDescriptor: BackendConfigurationDe
       key <- bcsAccessKey
     } yield new BatchComputeClient(region, id, key)
   }
+
+  val instanceTypeQuotasConfMap: Map[Int,Array[BcsInstanceTypeQuota]] = {
+    configurationDescriptor.backendConfig.as[Option[String]]("instance-type-quotas").getOrElse("").split(",\\s*").filter(q => q.trim().length()!=0).map(q => BcsInstanceTypeQuotas.parse(q.trim())).groupBy(_.cpu)
+  }
 }

@@ -8,9 +8,14 @@ import common.validation.ErrorOr._
 import cromwell.backend.impl.bcs.BcsClusterIdOrConfiguration.BcsClusterIdOrConfiguration
 import cromwell.backend.standard.StandardValidatedRuntimeAttributesBuilder
 import cromwell.backend.validation._
+import eu.timepit.refined.api.Refined
+import eu.timepit.refined.numeric.Positive
 import net.ceedubs.ficus.Ficus._
 import wom.types._
 import wom.values._
+import wom.RuntimeAttributesKeys
+import wom.format.MemorySize
+import wdl4s.parser.MemoryUnit
 import scala.util.{Failure, Success, Try}
 
 
@@ -44,7 +49,10 @@ final case class BcsRuntimeAttributes(
   verbose: Option[Boolean],
   vpc: Option[BcsVpcConfiguration],
   tag: Option[String],
-  isv:Option[String]
+  isv:Option[String],
+  cpu: Int Refined Positive,
+  memory: MemorySize,
+  matchInstanceTypeQuota: Option[BcsInstanceTypeQuota]
 )
 
 object BcsRuntimeAttributes {
@@ -68,6 +76,8 @@ object BcsRuntimeAttributes {
   // add job priority
   val PriorityKey = "priority"
   val PriorityDefault = WomInteger(1000)
+  private val MemoryDefaultValue = "9999 GB"
+  private val CpuDefaultValue = WomInteger(9999)
 
   private def failOnStderrValidation(runtimeConfig: Option[Config]) = FailOnStderrValidation.default(runtimeConfig)
 
@@ -103,6 +113,15 @@ object BcsRuntimeAttributes {
 
   private def isvValidation(runtimeConfig: Option[Config]): OptionalRuntimeAttributesValidation[String] = IsvValidation.optionalWithDefault(runtimeConfig)
 
+  private def cpuValidation(runtimeConfig: Option[Config]): RuntimeAttributesValidation[Int Refined Positive] = CpuValidation.instance
+    .withDefault(CpuValidation.configDefaultWomValue(runtimeConfig) getOrElse CpuDefaultValue)
+
+  private def memoryValidation(runtimeConfig: Option[Config]): RuntimeAttributesValidation[MemorySize] = {
+    MemoryValidation.withDefaultMemory(
+      RuntimeAttributesKeys.MemoryKey,
+      MemoryValidation.configDefaultString(RuntimeAttributesKeys.MemoryKey, runtimeConfig) getOrElse MemoryDefaultValue)
+  }
+
   def runtimeAttributesBuilder(backendRuntimeConfig: Option[Config]): StandardValidatedRuntimeAttributesBuilder = {
     val defaults = StandardValidatedRuntimeAttributesBuilder.default(backendRuntimeConfig).withValidation(
       mountsValidation(backendRuntimeConfig),
@@ -119,6 +138,8 @@ object BcsRuntimeAttributes {
       tagValidation(backendRuntimeConfig),
       imageIdValidation(backendRuntimeConfig),
       isvValidation(backendRuntimeConfig),
+      cpuValidation(backendRuntimeConfig),
+      memoryValidation(backendRuntimeConfig),
     )
 
     // TODO: docker trips up centaur testing, for now https://github.com/broadinstitute/cromwell/issues/3518
@@ -132,7 +153,32 @@ object BcsRuntimeAttributes {
     }
   }
 
-  def apply(validatedRuntimeAttributes: ValidatedRuntimeAttributes, backendRuntimeConfig: Option[Config]): BcsRuntimeAttributes = {
+  private def make_instance_type_by_cpu_memory(cpu: Int Refined Positive, memoryInGB: MemorySize, bcsConfiguration: BcsConfiguration): Option[BcsInstanceTypeQuota] = {
+    if (bcsConfiguration.instanceTypeQuotasConfMap.isEmpty){
+      return None
+    }
+
+    val cpuNum = cpu.value.toInt
+    val memoryNum = memoryInGB.to(MemoryUnit.GB).amount.toInt
+    if (cpuNum >= 9999 || memoryNum >= 9999){
+      return None
+    }
+
+    val cpuList = bcsConfiguration.instanceTypeQuotasConfMap.keys.toList.sorted
+    val matchCpuNum: Option[Int] = cpuList.find(k => k >= cpuNum)
+    val matchInstanceQuotas = (matchCpuNum match {
+      case Some(c: Int) => bcsConfiguration.instanceTypeQuotasConfMap(c)
+      case _ => bcsConfiguration.instanceTypeQuotasConfMap(cpuList.max)
+    })
+    matchInstanceQuotas.sorted.find(q=>q.memoryInGB>=memoryNum) match {
+      case Some(instance: BcsInstanceTypeQuota) =>  Some(instance)
+      case _ => Some(matchInstanceQuotas.max)
+    }
+  }
+
+  def apply(validatedRuntimeAttributes: ValidatedRuntimeAttributes, bcsConfiguration: BcsConfiguration): BcsRuntimeAttributes = {
+    val backendRuntimeConfig: Option[Config] = bcsConfiguration.runtimeConfig
+    
     val failOnStderr: Boolean =
       RuntimeAttributesValidation.extract(failOnStderrValidation(backendRuntimeConfig), validatedRuntimeAttributes)
     val continueOnReturnCode: ContinueOnReturnCode =
@@ -155,6 +201,10 @@ object BcsRuntimeAttributes {
     val vpc: Option[BcsVpcConfiguration] = RuntimeAttributesValidation.extractOption(vpcValidation(backendRuntimeConfig).key, validatedRuntimeAttributes)
     val tag: Option[String] = RuntimeAttributesValidation.extractOption(tagValidation(backendRuntimeConfig).key, validatedRuntimeAttributes)
     val isv: Option[String] = RuntimeAttributesValidation.extractOption(isvValidation(backendRuntimeConfig).key, validatedRuntimeAttributes)
+    val cpu: Int Refined Positive = RuntimeAttributesValidation.extract(cpuValidation(backendRuntimeConfig), validatedRuntimeAttributes)
+    val memory: MemorySize = RuntimeAttributesValidation.extract(memoryValidation(backendRuntimeConfig), validatedRuntimeAttributes)
+    val matchInstanceTypeQuota = make_instance_type_by_cpu_memory(cpu, memory, bcsConfiguration)
+
     new BcsRuntimeAttributes(
       continueOnReturnCode,
       dockerTag,
@@ -173,7 +223,10 @@ object BcsRuntimeAttributes {
       verbose,
       vpc,
       tag,
-      isv
+      isv,
+      cpu,
+      memory,
+      matchInstanceTypeQuota
     )
   }
 }
