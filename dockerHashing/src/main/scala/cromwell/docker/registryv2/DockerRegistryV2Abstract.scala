@@ -199,12 +199,12 @@ abstract class DockerRegistryV2Abstract(override val config: DockerRegistryConfi
       path = s"/v2/${dockerImageID.nameWithDefaultRepository}/manifests/${dockerImageID.reference}"
     )
   }
-
+  protected def authScheme: CaseInsensitiveString = AuthScheme.Bearer
   /**
     * Request to get the manifest, using the auth token if provided
     */
   private def manifestRequest(token: Option[String], imageId: DockerImageIdentifier): IO[Request[IO]] = {
-    val authorizationHeader = token.map(t => Authorization(Credentials.Token(AuthScheme.Bearer, t)))
+    val authorizationHeader = token.map(t => Authorization(Credentials.Token(authScheme, t)))
     val request = Method.GET(
       buildManifestUri(imageId),
       List(
@@ -269,6 +269,8 @@ abstract class DockerRegistryV2Abstract(override val config: DockerRegistryConfi
   }
 
   private def getDigestFromResponse(response: Response[IO]): IO[DockerHashResult] = response match {
+    case Status.Successful(r) if r.headers.exists(_.value.equalsIgnoreCase(ManifestV2MediaType)) =>
+      r.as[DockerManifest].flatMap(manifest => IO.fromEither(DockerHashResult.fromString(manifest.config.digest).toEither))
     case Status.Successful(r) => extractDigestFromHeaders(r.headers)
     case Status.Unauthorized(_) => IO.raiseError(new Unauthorized)
     case Status.NotFound(_) => IO.raiseError(new NotFound)
@@ -276,7 +278,7 @@ abstract class DockerRegistryV2Abstract(override val config: DockerRegistryConfi
     )
   }
 
-  private def extractDigestFromHeaders(headers: Headers) = {
+  private def extractDigestFromHeaders(headers: Headers): IO[DockerHashResult] = {
     headers.find(a => a.toRaw.name.equals(DigestHeaderName)) match {
       case Some(digest) => IO.fromEither(DockerHashResult.fromString(digest.value).toEither)
       case None => IO.raiseError(new Exception(s"Manifest response did not have a digest header"))

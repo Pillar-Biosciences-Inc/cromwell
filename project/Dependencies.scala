@@ -318,6 +318,7 @@ object Dependencies {
     "batch",
     "core",
     "cloudwatchlogs",
+    "ecr",
     "s3",
     "sts",
   ).map(artifactName => "software.amazon.awssdk" % artifactName % awsSdkV)
@@ -513,7 +514,7 @@ object Dependencies {
 
   val databaseMigrationDependencies: List[ModuleID] = liquibaseDependencies ++ dbmsDependencies
 
-  val dockerHashingDependencies: List[ModuleID] = http4sDependencies ++ circeDependencies ++ aliyunCrDependencies
+  val dockerHashingDependencies: List[ModuleID] = http4sDependencies ++ circeDependencies ++ aliyunCrDependencies ++ awsCloudDependencies
 
   val cromwellApiClientDependencies: List[ModuleID] = List(
     "org.typelevel" %% "cats-effect" % catsEffectV,
