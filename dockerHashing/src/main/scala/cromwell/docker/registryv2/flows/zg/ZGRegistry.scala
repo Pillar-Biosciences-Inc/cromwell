@@ -7,7 +7,7 @@ import org.http4s.client._
 import org.http4s.Header
 import scala.util.{Failure, Success, Try}
 import cromwell.docker.DockerHashResult
-import cromwell.docker.DockerInfoActor.DockerInfoContext
+import cromwell.docker.DockerInfoActor._
 import org.apache.http.client.methods.{HttpGet}
 import org.apache.http.impl.client.{HttpClients, CloseableHttpClient}
 import org.apache.http.util.EntityUtils
