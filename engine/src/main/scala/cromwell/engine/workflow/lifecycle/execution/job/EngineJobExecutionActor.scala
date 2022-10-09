@@ -522,6 +522,7 @@ class EngineJobExecutionActor(replyTo: ActorRef,
     jobDescriptor.maybeCallCachingEligible match {
       // If the job is eligible, initialize job hashing and go to CheckingCallCache state
       case eligible: CallCachingEligible =>
+        log.info(s"BT-322 {} docker hash is {}", jobTag, eligible.dockerHash)
         initializeJobHashing(jobDescriptor, activity, eligible) match {
           case Success(ejha) =>
             val template = s"BT-322 {} is eligible for call caching with read = {} and write = {}"
@@ -543,16 +544,18 @@ class EngineJobExecutionActor(replyTo: ActorRef,
   private def handleReadFromCacheOff(jobDescriptor: BackendJobDescriptor, activity: CallCachingActivity, updatedData: ResponsePendingData) = {
     jobDescriptor.maybeCallCachingEligible match {
       // If the job is eligible, initialize job hashing so it can be written to the cache
-      case eligible: CallCachingEligible => initializeJobHashing(jobDescriptor, activity, eligible) match {
-        case Failure(failure) =>
-          log.warning(s"BT-322 {} failed to initialize job hashing", jobTag)
-          // This condition in `handleReadFromCacheOn` ends in a `respondAndStop(JobFailedNonRetryableResponse(...))`,
-          // but with cache reading off Cromwell instead logs this condition and runs the job.
-          log.error(failure, "Failed to initialize job hashing. The job will not be written to the cache")
-        case _ =>
-          val template = s"BT-322 {} is eligible for call caching with read = {} and write = {}"
-          log.info(template, jobTag, activity.readFromCache, activity.writeToCache)
-      }
+      case eligible: CallCachingEligible => 
+        log.info(s"BT-322 {} docker hash is {}", jobTag, eligible.dockerHash)
+        initializeJobHashing(jobDescriptor, activity, eligible) match {
+          case Failure(failure) =>
+            log.warning(s"BT-322 {} failed to initialize job hashing", jobTag)
+            // This condition in `handleReadFromCacheOn` ends in a `respondAndStop(JobFailedNonRetryableResponse(...))`,
+            // but with cache reading off Cromwell instead logs this condition and runs the job.
+            log.error(failure, "Failed to initialize job hashing. The job will not be written to the cache")
+          case _ =>
+            val template = s"BT-322 {} is eligible for call caching with read = {} and write = {}"
+            log.info(template, jobTag, activity.readFromCache, activity.writeToCache)
+        }
       // Don't even initialize hashing to write to the cache if the job is ineligible
       case _ =>
         log.info(s"BT-322 {} is not eligible for call caching", jobTag)
