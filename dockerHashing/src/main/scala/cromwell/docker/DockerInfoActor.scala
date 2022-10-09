@@ -19,6 +19,7 @@ import cromwell.docker.registryv2.flows.dockerhub.DockerHubRegistry
 import cromwell.docker.registryv2.flows.google.GoogleRegistry
 import cromwell.docker.registryv2.flows.quay.QuayRegistry
 import cromwell.docker.registryv2.flows.awsecr.AWSCloudCRRegistry
+import cromwell.docker.registryv2.flows.zg.ZGRegistry
 import cromwell.util.GracefulShutdownHelper.ShutdownCommand
 import fs2.Pipe
 import fs2.concurrent.{NoneTerminatedQueue, Queue}
@@ -234,11 +235,12 @@ object DockerInfoActor {
 
     // To add a new registry, simply add it to that list
     List(
+      ("zg", {c: DockerRegistryConfig => new ZGRegistry(c)}),
+      ("awscloudcr", {c: DockerRegistryConfig => new AWSCloudCRRegistry(c)}),
+      ("alibabacloudcr", {c: DockerRegistryConfig => new AlibabaCloudCRRegistry(c)}),
       ("dockerhub", { c: DockerRegistryConfig => new DockerHubRegistry(c) }),
       ("google", { c: DockerRegistryConfig => new GoogleRegistry(c) }),
       ("quay", { c: DockerRegistryConfig => new QuayRegistry(c) }),
-      ("alibabacloudcr", {c: DockerRegistryConfig => new AlibabaCloudCRRegistry(c)}),
-      ("awscloudcr", {c: DockerRegistryConfig => new AWSCloudCRRegistry(c)})
     ).traverse[ErrorOr, DockerRegistry]({
       case (configPath, constructor) => DockerRegistryConfig.fromConfig(config.as[Config](configPath)).map(constructor)
     }).unsafe("Docker registry configuration")
