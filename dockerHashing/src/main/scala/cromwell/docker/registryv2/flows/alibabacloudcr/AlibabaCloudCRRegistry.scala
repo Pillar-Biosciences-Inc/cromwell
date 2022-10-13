@@ -21,7 +21,8 @@ class AlibabaCloudCRRegistry(config: DockerRegistryConfig) extends DockerRegistr
   val ProductName = "cr"
   val HashAlg = "sha256"
   val regionPattern = """[^\s]+"""
-  val validAlibabaCloudCRHosts: Regex = s"""registry|registry-internal.($regionPattern).aliyuncs.com""".r
+  val validAlibabaCloudCRHosts: Regex = s"""registry.($regionPattern).aliyuncs.com""".r
+  val validAlibabaCloudCRInternalHosts: Regex = s"""registry-internal.($regionPattern).aliyuncs.com""".r
 
   val validCrEndpoint: Regex = s"""cr.($regionPattern).aliyuncs.com""".r
   val validCrVpcEndpoint: Regex = s"""cr-vpc.($regionPattern).aliyuncs.com""".r
@@ -59,6 +60,7 @@ class AlibabaCloudCRRegistry(config: DockerRegistryConfig) extends DockerRegistr
   private def getManifest(context: DockerInfoContext): DockerInfoResponse = {
 
     val regionId = context.dockerImageID.host match {
+      case Some(validAlibabaCloudCRInternalHosts(region)) => region
       case Some(validAlibabaCloudCRHosts(region)) => region
       case _ => throw new Exception(s"The host ${context.dockerImageID.host} does not have the expected region id")
     }
