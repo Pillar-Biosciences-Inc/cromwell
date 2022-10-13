@@ -38,7 +38,9 @@ class AlibabaCloudCRRegistry(config: DockerRegistryConfig) extends DockerRegistr
 
 
   override def accepts(dockerImageIdentifier: DockerImageIdentifier): Boolean = {
-    dockerImageIdentifier.hostAsString.contains(".aliyuncs.")
+    val supported = dockerImageIdentifier.hostAsString.contains(".aliyuncs.")
+    logger.info(s"Docker image host: ${dockerImageIdentifier.hostAsString} for accepts: ${supported}")
+    supported
   }
 
   override protected def getToken(dockerInfoContext: DockerInfoContext)(implicit client: Client[IO]): IO[Option[String]] = {
@@ -67,6 +69,7 @@ class AlibabaCloudCRRegistry(config: DockerRegistryConfig) extends DockerRegistr
 
     val defaultEndpoint = ProductName + "." + regionId + ".aliyuncs.com"
     val endpoint = getAliyunEndpointFromContext(context).getOrElse(defaultEndpoint)
+    logger.info(s"Docker host: ${context.dockerImageID.host}, endpoint: ${endpoint}, regionId: ${regionId}")
     DefaultProfile.addEndpoint(regionId, ProductName, endpoint)
 
     val profile: IClientProfile = getAliyunCredentialFromContext(context) match {
